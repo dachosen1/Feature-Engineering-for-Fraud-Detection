@@ -1,0 +1,952 @@
+---
+title: "EDA Assignment III"
+author: "Anderson Nelson (an2908, an2908@columbia.edu)"
+date: "9/28/2019"
+output:
+  prettydoc::html_pretty:
+    toc: true
+    theme: tactile
+    highlight: github
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+opts_chunk$set(echo = TRUE, eval = TRUE, comment="", warning = FALSE, message = FALSE, tidy.opts=list(width.cutoff=55), tidy = TRUE)
+```
+
+```{r}
+library(data.table)
+library(DT)
+library(tidyverse)
+library(lubridate)
+library(ggiraph)
+library(heatmaply)
+```
+
+
+## Data Pre-Processing
+
+```{r}
+# read data 
+purchase.cc.data <- fread('Data/purchase_credit_card.csv')
+```
+
+```{r}
+# Constants  
+year.month.name <- 'Year-Month'
+agency.number.name <- 'Agency Number'
+agency.name <- 'Agency Name'
+cardholder.last.name <- 'Cardholder Last Name'
+carholder.firt.initial.name <- 'Cardholder First Initial'
+description.name <- 'Description'
+amount.name <- 'Amount'
+vendor.name <- 'Vendor'
+posted.date.name <- 'Posted Date'
+merchant.category.code.name <- 'Merchant Category Code (MCC)'
+
+
+transaction.time.name <- 'Transaction Time'
+transaction.date.name <- 'Transaction Date'
+
+week.number.name <- 'Week Number'
+year.week.name <- 'Year Week'
+
+year.name <- 'Year'
+month.name <- 'Month'
+
+
+day.of.week.name <- 'day_of_week'
+weekend.day.name <- 'weekend_day'
+```
+
+```{r}
+# Converts a 6 digit interest that represents year and month into date time format values for year and month
+
+convert_int_to_date <-
+  function(data, date_time = 'year') {
+    char_data <- as.character(data)
+    char_data_padded <-
+      str_pad(char_data,
+              width = 8,
+              side = 'right',
+              pad = '1')
+    if (date_time == 'year') {
+      return_value <- year(ymd(char_data_padded))
+    } else if (date_time == 'month'){
+        return_value <- month(ymd(char_data_padded))
+    }
+    return (return_value)
+  }
+
+# Calcuates the z score for a data set
+z_score <- function(data) {
+  data_mean <- mean(data)
+  data_std <- sd(data)
+  z_score = (data - data_mean) / data_std
+  
+  return(round(z_score,3))
+}
+
+# Summarize data table
+data_summary_table <- function (data, colum_name) {
+  sub_data <- data[, .('Count' = .N), by = colum_name]
+  
+  setorder(sub_data, -Count)
+  return(sub_data)
+}
+
+```
+
+
+```{r}
+
+# Does transaction date == posted date
+paste0('Transaction date and posted date are equal, ',
+       round((
+         sum(
+           purchase.cc.data$`Transaction Date` == purchase.cc.data$`Posted Date`
+         ) /  nrow(purchase.cc.data)
+       ) * 100, 2),
+       '% of the time')
+
+# convert  year month column to date format
+purchase.cc.data$Year <-
+  convert_int_to_date(purchase.cc.data$`Year-Month`, 'year')
+purchase.cc.data$Month <-
+  convert_int_to_date(purchase.cc.data$`Year-Month`, 'month')
+
+# Transaction Date
+transaciton_date <-
+  str_split(purchase.cc.data$`Transaction Date`,
+            pattern = " ",
+            simplify = TRUE)
+purchase.cc.data$`Transaction Date` <- mdy(transaciton_date[, 1])
+purchase.cc.data$`Transaction Time` <- transaciton_date[, 2]
+table(transaciton_date[, 3])
+
+
+# posted Date
+posted_date <-
+  str_split(purchase.cc.data$`Posted Date`,
+            pattern = " ",
+            simplify = TRUE)
+purchase.cc.data$`Posted Date` <- mdy(posted_date[, 1])
+table(posted_date[, 3])
+
+
+# Week
+purchase.cc.data$`Week Number` <-
+  week(purchase.cc.data$`Transaction Date`)
+purchase.cc.data$`Year Week` <-
+  paste0(purchase.cc.data$Year, purchase.cc.data$`Week Number`)
+
+
+
+```
+
+
+```{r}
+# what time do these transaction occcur 
+data_summary_table(purchase.cc.data, transaction.time.name)
+```
+
+## Exploratory Data Analysis 
+
+### Agency 
+
+```{r}
+# number of card holders authorized on this per accout
+cardholder.count.by.agency <- purchase.cc.data[, .("Number of Cardholders" = length(unique(get(cardholder.last.name)))), by = agency.name]
+
+setorder(cardholder.count.by.agency, -`Number of Cardholders`)
+datatable(cardholder.count.by.agency)
+
+summary(cardholder.count.by.agency$`Number of Cardholders`)
+
+# visualize number of cardholders 
+ggplot(data = cardholder.count.by.agency, aes(x = '', y = `Number of Cardholders`)) + 
+  geom_boxplot(col = "#D53E4F", fill = "#D53E4F", alpha = .5) + 
+  ggtitle('Number of cardholders per Agency') + 
+  theme_classic() + xlab("") + coord_flip()
+
+```
+
+
+```{r}
+paste0('There are ', length(unique(purchase.cc.data$Vendor)), ' unique vendors')
+paste0('There are ', length(unique(
+  purchase.cc.data$`Merchant Category Code (MCC)`
+)), ' Merchant Category')
+paste0('There are ', length(unique(purchase.cc.data$Description)), ' Description type')
+```
+
+```{r}
+# County the number of agencys
+agency.summary.table <-
+  data_summary_table(purchase.cc.data, agency.name)
+datatable(agency.summary.table)
+
+paste0(
+  'There are ',
+  nrow(agency.summary.table),
+  ' agencys, with an average transction of ',
+  round(mean(agency.summary.table$Count), 2)
+)
+
+paste0(
+  'There are ',
+  nrow(agency.summary.table),
+  ' agencys, with an average transction of ',
+  round(mean(agency.summary.table$Count), 2)
+)
+
+ggplot(data = agency.summary.table, aes(x = '', y = Count)) +
+  geom_boxplot(col = "#D53E4F", fill = "#D53E4F", alpha = .5) +
+  ggtitle('Number of transactions per Agency') +
+  theme_classic() + coord_flip() + xlab("")
+```
+
+### Merchant
+
+```{r}
+# popular merchants
+vendor.summary <-
+  purchase.cc.data[, .('Count' = .N,
+                       'Average Transaction Size' = round(mean(get(amount.name)), 2)), by = vendor.name]
+setorder(vendor.summary, -`Average Transaction Size`)
+datatable(vendor.summary)
+```
+
+### Merchant Category Code (MCC)
+
+```{r}
+# number of merchants
+merchant.category.code.summary <-
+  data_summary_table(purchase.cc.data, merchant.category.code.name)
+datatable(merchant.category.code.summary)
+
+
+# number of merchants over time
+number.merchants.overtime <-
+  purchase.cc.data[, .('Count' = length(unique(get(
+    merchant.category.code.name
+  )))), by = transaction.date.name]
+
+ggplot(number.merchants.overtime, aes(x = `Transaction Date`, y = Count)) +
+  geom_line(col = "#D53E4F") + theme_classic() + ggtitle('Number of unique merchants by date')
+
+```
+
+### Weekday 
+
+```{r}
+
+purchase.cc.data$day_of_week <-
+  weekdays(purchase.cc.data$`Transaction Date`)
+
+day_of_week_summary <-
+  purchase.cc.data[, .(Count = .N), by = day_of_week]
+day_of_week_summary$day_of_week <-
+  as.factor(day_of_week_summary$day_of_week)
+
+
+day_of_week_summary$day_of_week <-
+  fct_relevel(
+    day_of_week_summary$day_of_week,
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday'
+  )
+
+ggplot(data =  day_of_week_summary, aes (x = day_of_week, y = Count, label = Count)) +
+  geom_col(fill = "#D53E4F") + coord_flip() +
+  geom_text(nudge_y = 4600) +
+  theme_classic() +
+  xlab('Day of The Week') +
+  ggtitle('Transaction Day of the Week Distribution')
+```
+
+
+# New Features 
+
+The Feature engineering strategies for credit card fraud detection was an essential framework in creating the features to analyze credit card transaction data. Here are some of the key takeaways that will be implemented in the data. 
+
+1 ) A more compressive way for feature creation is to derive some features using a transaction aggregation strategy.
+
+2) The derivation of the aggregation features consists in grouping the transactions made during the last given number of hours, first by card or account number, then by transaction type, merchant group, country or other, followed by calculating the number of transactions or the total amount spent on those transactions. 
+
+3) When aggregating customer transactions, there is an important question on how much to accumulate, in the sense that the marginal value of new information may diminish as time passes. Indeed, when time passes, information loses their value, in the sense that customer spending patterns are not expected to remain constant over the years. In particular, Whitrow et al. define a fixed time frame to be 24, 60 or 168 h.
+
+
+### 1. Daily Transactions traffic
+
+By calculating the number of the daily transaction by the agency we can understand the popularity of each merchant. I hypothesize that the more popular merchant is more likely to be the target of frauds than other merchants. From the table, there are a small percentage of merchants with more than 200 daily transactions. 
+
+By providing a list of mostly targeting merchants we can place those merchants on a watchlist for possible suspicious activity. 
+
+
+```{r}
+daily.agency.transaction <-
+  purchase.cc.data[, .(`Daily Transaction Count` = .N), by = c(transaction.date.name, agency.name)]
+datatable(daily.agency.transaction)
+
+purchase.cc.data <-
+  merge(
+    x = purchase.cc.data,
+    y = daily.agency.transaction,
+    by = c(transaction.date.name, agency.name),
+    all.x = TRUE
+  )
+
+hist(daily.agency.transaction$`Daily Transaction Count`, col = "#D53E4F", main = 'Histogram of daily transaction count', xlab = 'Daily Transaction count') 
+
+# Checks
+sum(is.na(purchase.cc.data))
+nrow(purchase.cc.data) == 442458
+```
+
+### 2. Number of weekly user per agency 
+
+Here I calculate the number of that have used a corporate card every week. This new feature can highly two concepts: 
+1)	An agency with a sudden spike in the number of unique users
+2)	Using the same logic as the daily agency traffic, this features allows us to narrow down on the accounts with the most users. Those are the account that will likely to have large amounts of funds for a target for hackers.
+
+
+
+```{r}
+weekly.user.agency.data <-
+  purchase.cc.data[, .(`Weekly Unique Card Users` = length(get(unique(
+    cardholder.last.name
+  )))), by = c(agency.name, year.week.name)]
+
+purchase.cc.data <-
+  merge(
+    x = purchase.cc.data,
+    y = weekly.user.agency.data,
+    by = c(agency.name, year.week.name),
+    all.x = TRUE
+  )
+
+hist(weekly.user.agency.data$`Weekly Unique Card Users`, col = "#D53E4F", main = 'Histogram of weekly unique card users', xlab = 'Unique card users') 
+
+# Checks
+sum(is.na(purchase.cc.data))
+nrow(purchase.cc.data) == 442458
+```
+
+### 3. Weekly merchant revenue 
+
+The weekly merchant revenue  from ageny accounts also highlight the top merchants, the traffic considers the number of people visiting the store, but this new feature also highlights the amount spend. 
+
+This feature narrow down on merhants that have high value items. Hypotethis is that score with high valu items have higher risk of fraud. 
+
+```{r}
+weekly.merchant.rev.data <-
+  purchase.cc.data[, .(`Weekly merchant revenue` = (sum(get(amount.name)))), by = c(year.week.name, merchant.category.code.name)]
+datatable(weekly.merchant.rev.data)
+
+purchase.cc.data <-
+  merge(
+    x = purchase.cc.data,
+    y = weekly.merchant.rev.data,
+    by = c(year.week.name, merchant.category.code.name),
+    all.x = TRUE
+  )
+
+ggplot(weekly.merchant.rev.data, aes(x = '', y = `Weekly merchant revenue`)) + 
+  geom_boxplot( col = "#D53E4F")+ xlab('') + ylab('Weekly Merchant Revenue') + 
+  theme_classic() + ggtitle(' Range of Weekly Revenue') + 
+  coord_flip()
+
+# Checks
+sum(is.na(purchase.cc.data))
+nrow(purchase.cc.data) == 442458
+```
+
+
+### 4. Number of cardholder transction during weekday and weekend 
+
+By splitting cardholders into weekend and weekend, it provides an understanding of work schedules, and when a cardholder is likely to use their card.  If a cardholder always uses their card on the weekday and there’s a transaction on the weekend, it would merit further exploration. 
+
+```{r}
+purchase.cc.data$weekend_day <-
+  ifelse(purchase.cc.data$day_of_week %in% c('Saturday', 'Sunday'),
+         'Weekend',
+         'Weekday')
+
+weekend.day.cardholder.transaction.data <- purchase.cc.data[, .(
+  `Carholder Transaction Count` = .N),
+  by = c(transaction.date.name,cardholder.last.name, weekend.day.name)
+]
+datatable(weekend.day.cardholder.transaction.data)
+
+purchase.cc.data <-
+  merge(
+    x = purchase.cc.data,
+    y = weekend.day.cardholder.transaction.data,
+    by = c(transaction.date.name, cardholder.last.name, weekend.day.name),
+    all.x = TRUE
+  )
+
+ggplot(weekend.day.cardholder.transaction.data, 
+       aes(x = `weekend_day`, y = `Carholder Transaction Count`)) + 
+  geom_boxplot( col = "#D53E4F")+ xlab('') + ylab('Carholder Transaction Count') + 
+  theme_classic() + ggtitle('Weekly Carholder Transaction Count') + 
+  coord_flip()
+
+```
+
+
+### 5.  Number of transaction during the weekend and weekday per merchant
+
+Separating transaction count into the weekend and weekday displays when cardholders are most likely to shop. Convey one of two things 
+
+This new feature will test if fraud happens during high traffic or fewer traffic moments. The feature captures traffic from a different standpoint since it captures weekly patterns and isn’t susceptible to daily fluctuations in the visit.
+
+On the other hand it could provides a unique view into when fraud is occurring. From the data we understand that the majority of the transaction occur the weekday, however, it could very well be that fraud is more likely to occur on the weekend. The rationale is that banks are closed, and the accountants for the agencies are at home and they would not notice any company unauthorized purchases until its too late. 
+
+
+```{r}
+weekend.day.transaction.count.per.merchant.data <- purchase.cc.data[, .(
+  `Weekend transaction count` = .N),
+  by = c(transaction.date.name,merchant.category.code.name, weekend.day.name)
+]
+datatable(weekend.day.transaction.count.per.merchant.data)
+
+purchase.cc.data <-
+  merge(
+    x = purchase.cc.data,
+    y = weekend.day.transaction.count.per.merchant.data,
+    by = c(transaction.date.name, merchant.category.code.name, weekend.day.name),
+    all.x = TRUE
+  )
+
+ggplot(weekend.day.transaction.count.per.merchant.data, 
+       aes(x = `weekend_day`, y = `Weekend transaction count`)) + 
+  geom_boxplot( col = "#D53E4F")+ xlab('') + ylab('Merchant Transaction Count') + 
+  theme_classic() + ggtitle(' Range of Weekly Transaction Count') + 
+  coord_flip()
+
+
+# Checks
+sum(is.na(purchase.cc.data))
+nrow(purchase.cc.data) == 442458
+
+```
+
+
+### 6. Weekly Merchant revenue per description  
+
+
+Weekly merchant revenue per agency highlight what each merchant are selling. This feature is import to understand the kinds of items that are most likely to be involved in fraud. It considers another angle that traffic doesn’t capture, and focuses on the type of items, and the merchants that sell them. 
+
+The hypothesis is that the merchants that sell items that have high consumer value have a higher risk of fraud  
+
+```{r}
+weekly.merchant.rev.per.description <- purchase.cc.data[, .(
+  `Weekly Merchant Revenue per description` = sum(get(amount.name))),
+  by = c(transaction.date.name,merchant.category.code.name, description.name)
+]
+datatable(weekly.merchant.rev.per.description)
+
+purchase.cc.data <-
+  merge(
+    x = purchase.cc.data,
+    y = weekly.merchant.rev.per.description,
+    by = c(transaction.date.name, merchant.category.code.name, description.name),
+    all.x = TRUE
+  )
+
+ggplot(weekly.merchant.rev.per.description, aes(x = '', y = `Weekly Merchant Revenue per description`)) + 
+  geom_boxplot( col = "#D53E4F")+ xlab('') + ylab('Merchant revenue per description') + 
+  theme_classic() + ggtitle('Weekly Description Revenue per merchant') + 
+  coord_flip()
+
+# Checks
+sum(is.na(purchase.cc.data))
+nrow(purchase.cc.data) == 442458
+```
+
+
+### 7. Amount of merchant transactions during the week, and weekend 
+
+Certain stores tend to attract different demographics on the weekend vs. weekday. This feature aims at capturing that demographic and compares historical patterns against it.
+ 
+
+```{r}
+# number of transaction during the week
+
+weekend.day.transaction.amount.per.merchant.data <- purchase.cc.data[, .(
+  `Weekend transaction count` = sum(get(amount.name))),
+  by = c(transaction.date.name,merchant.category.code.name, weekend.day.name)
+]
+datatable(weekend.day.transaction.amount.per.merchant.data)
+
+purchase.cc.data <-
+  merge(
+    x = purchase.cc.data,
+    y = weekend.day.transaction.amount.per.merchant.data,
+    by = c(transaction.date.name, merchant.category.code.name, weekend.day.name),
+    all.x = TRUE
+  )
+
+ggplot(weekend.day.transaction.amount.per.merchant.data, 
+       aes(x = `weekend_day`, y = `Weekend transaction count`)) + 
+  geom_boxplot( col = "#D53E4F")+ xlab('') + ylab('Merchant Revenue') + 
+  theme_classic() + ggtitle('Weekly Revenue per Merchant') + 
+  coord_flip()
+
+
+# Checks
+sum(is.na(purchase.cc.data))
+nrow(purchase.cc.data) == 442458
+```
+
+
+### 8. Total amount spent daily per carholder
+
+
+
+```{r}
+
+daily.holder.data <-
+  purchase.cc.data[, .(`Daily cardholder amount` = (sum(get(amount.name)))), by = c(transaction.date.name, cardholder.last.name)]
+
+datatable(daily.holder.data)
+
+
+purchase.cc.data <-
+  merge(
+    x = purchase.cc.data,
+    y = daily.holder.data,
+    by = c(transaction.date.name, cardholder.last.name),
+    all.x = TRUE
+  )
+
+ggplot(daily.holder.data, 
+       aes(x ='', y = `Daily cardholder amount`)) + 
+  geom_boxplot( col = "#D53E4F")+ xlab('') + ylab('Daily Amount Spent') + 
+  theme_classic() + ggtitle('Daily Amount Spent per Cardholder') + 
+  coord_flip()
+
+# Checks
+sum(is.na(purchase.cc.data))
+nrow(purchase.cc.data) == 442458
+```
+
+
+### 9. Descriptions per carholder
+
+
+Amount per description assumes that agency’s have a corporate that pre-approves purchases or has type that’s allowed to be purchased by cardholders. This feature allows to spot any items that out of the ordinary for the cardholder. 
+
+```{r}
+
+daily.holder.description.data <-
+  purchase.cc.data[, .(`Daily cardholder amount per description` = (sum(get(amount.name)))), by = c(transaction.date.name,cardholder.last.name,description.name)]
+
+datatable(daily.holder.description.data)
+
+purchase.cc.data <-
+  merge(
+    x = purchase.cc.data,
+    y = daily.holder.description.data,
+    by = c(transaction.date.name,cardholder.last.name,description.name),
+    all.x = TRUE
+  )
+
+
+hist(
+  daily.holder.description.data$`Daily cardholder amount per description`,
+  col = "#D53E4F",
+  main = 'Histogram of cardholder spend on description',
+  xlab = 'Card holder spent'
+)
+
+# Checks
+sum(is.na(purchase.cc.data))
+nrow(purchase.cc.data) == 442458
+
+```
+
+
+### 10. Total amount spent per day of week at agency 
+
+Calculates average amout spent per day by ageny. The data suggest that there numerous outliers that deviate from the mean. 
+
+
+```{r}
+dayofweek.spend.per.agency.data <-
+  purchase.cc.data[, .(`DOW Amount Spent` = (sum(get(amount.name)))), by = c(day.of.week.name, agency.name)]
+
+datatable(dayofweek.spend.per.agency.data)
+
+purchase.cc.data <- merge(x = purchase.cc.data, y = dayofweek.spend.per.agency.data,
+                          by = c(day.of.week.name, agency.name), all.x = TRUE)
+
+ggplot(dayofweek.spend.per.agency.data, 
+       aes(x =`day_of_week`, y = `DOW Amount Spent`)) + 
+  geom_boxplot( col = "#D53E4F")+ xlab('Day of Week') + ylab('Daily Amount Spent') + 
+  theme_classic() + ggtitle('Daily Amount Spent per Day') + 
+  coord_flip()
+
+# Checks
+sum(is.na(purchase.cc.data))
+nrow(purchase.cc.data) == 442458
+```
+
+
+### 11. Total number of merchants per week by agency 
+
+Assuming that vendors with multiple visit likely to be legit. This provides insight into the less frequented vendors, and those that have not historically been visited would be a red flag.  
+
+```{r}
+
+weekly.merchant.visit.per.agency <-
+  purchase.cc.data[, .(`weekly vendor visit` = (length(get(vendor.name)))), by = c(transaction.date.name, merchant.category.code.name)]
+
+datatable(weekly.merchant.visit.per.agency)
+
+purchase.cc.data <-
+  merge(
+    x = purchase.cc.data,
+    y = weekly.merchant.visit.per.agency,
+    by = c(transaction.date.name, merchant.category.code.name),
+    all.x = TRUE
+  )
+
+ggplot(weekly.merchant.visit.per.agency, 
+       aes(x ='', y = `weekly vendor visit`)) + 
+  geom_boxplot( col = "#D53E4F")+ xlab('weekly vendor visit') + ylab('Number of visits') + 
+  theme_classic() + ggtitle('Daily Visits Per Vendor') + 
+  coord_flip()
+
+# Checks
+sum(is.na(purchase.cc.data))
+nrow(purchase.cc.data) == 442458
+```
+
+
+### 12. Time since last transaction
+
+Time since the last transaction provides insight on when the agency last used their card.  This can be useful  in one of two way: 
+
+1)	Agencies with a short time lag could indicate an active purchaser, and with that level of activity, it increases the likelihood of their card being stolen and used for fraud  
+
+2)	  Highlight fraud for lesser utilized cards. If a card is rarely used and suddenly has many transactions in short lag, it could be a cause for further exploration. 
+
+
+
+```{r}
+
+time.since.last.transaction.data <-
+  purchase.cc.data[, .(`Days since last transaction` =   abs(lag(get(
+    transaction.date.name
+  ), n = 1) - get(transaction.date.name))), by = c(agency.name)]
+
+
+paste0(
+  'Features introduced ',
+  sum(is.na(time.since.last.transaction.data)),
+  ' NA for the first transaction. To remedy, replace those values with 0'
+)
+
+# replace all NA with 0
+time.since.last.transaction.data[is.na(`Days since last transaction`)] <-0
+
+datatable(time.since.last.transaction.data)
+
+purchase.cc.data$`Days since last transaction` <-
+  time.since.last.transaction.data$`Days since last transaction`
+
+
+ggplot(time.since.last.transaction.data, 
+       aes(x ='', y = `Days since last transaction`)) + 
+  geom_boxplot( col = "#D53E4F")+ xlab('') + ylab('Time Lag') + 
+  theme_classic() + ggtitle('Days since last transactions ') + 
+  coord_flip()
+
+# Checks
+sum(is.na(purchase.cc.data))
+nrow(purchase.cc.data) == 442458
+```
+
+
+### 13. Average weekly transaction size per agency 
+
+Average weekly transaction size per agency provides an understanding of the usual agency spend. Features provide insight into how the agencies compare to each other. Agencies with larger average are more likely to have high cash balances, which makes them more susceptible to fraud. 
+
+
+```{r}
+
+avg.weekly.amount.per.agency <-
+  purchase.cc.data[, .(`Average weekly amount per merchant` = mean(get(amount.name))), by = c(week.number.name, agency.name)]
+
+purchase.cc.data <-
+  merge(
+    x = purchase.cc.data,
+    y = avg.weekly.amount.per.agency,
+    by = c(week.number.name, agency.name),
+    all.x = TRUE
+  )
+
+
+ggplot(avg.weekly.amount.per.agency, 
+       aes(x ='', y = `Average weekly amount per merchant` / 1000)) + 
+  geom_boxplot( col = "#D53E4F")+ xlab('') + ylab('Weekly Amount ($000)') + 
+  theme_classic() + ggtitle('Weekly Amount Per Agency') + 
+  coord_flip()
+
+
+# Checks
+sum(is.na(purchase.cc.data))
+nrow(purchase.cc.data) == 442458
+```
+
+
+### 14. Z score of current purchace from average 
+
+A Z-score is a numerical measurement used in statistics of a value's relationship to the mean (average) of a group of values, measured in terms of standard deviations from the mean. If a Z-score is 0, it indicates that the data point's score is identical to the mean score. A Z-score of 1.0 would indicate a value that is one standard deviation from the mean. Z-scores may be positive or negative, with a positive value indicating the score is above the mean and a negative score indicating it is below the mean.
+
+A Z score of higher than 3% occurs less than 1% of the time, and they should be investigated. The data suggest that there's a z Score of 176, which is exceptionally high. The data isnormally shaped like a normal distribution curve. 
+
+
+```{r}
+
+amount.zscore.data <-
+  purchase.cc.data[, .(`Amount Z Score` = z_score(get(amount.name))), by = c( agency.name)]
+
+datatable(amount.zscore.data)
+
+amount.z.score.name <- 'Amount Z Score'
+
+paste0('z score introduced ', sum(is.na(amount.zscore.data)), ' NA in the data set. Convert NA to 0. ')
+
+# convert NA to 0 
+amount.zscore.data[is.na(get(amount.z.score.name))]$`Amount Z Score` <- 0   
+purchase.cc.data$`Amount Z Score` <- amount.zscore.data$`Amount Z Score`
+
+
+
+hist(
+  amount.zscore.data$`Amount Z Score`,
+  col = "#D53E4F",
+  main = 'Histogram of amount Z score',
+  xlab = 'Amount Z Score'
+)
+
+# Checks
+sum(is.na(purchase.cc.data))
+nrow(purchase.cc.data) == 442458
+```
+
+
+### 15. Max daily transaction per vendor 
+
+Calculating the maximum spend per day indicates where to look for fraud at each vendor. The features assume that fraudsters are a big spender and are likely to spend a large amount at each store visit. By isolating and reviewing each incident, the merchant would be able to deduce the credibility of each transaction. 
+
+```{r}
+
+max.vendor.transaction.amount.data <-
+  purchase.cc.data[, .(`Daily Max Vendor Transaction Amount` = (max(get(amount.name)))), by = c(transaction.date.name,agency.name, merchant.category.code.name)]
+
+daily.max.amout.name  <- 'Daily Max Vendor Transaction Amount'
+
+datatable(max.vendor.transaction.amount.data)
+
+purchase.cc.data <-
+  merge(
+    x = purchase.cc.data,
+    y = max.vendor.transaction.amount.data,
+    by = c(transaction.date.name, agency.name, merchant.category.code.name),
+    all.x = TRUE
+  )
+
+ggplot(max.vendor.transaction.amount.data, 
+       aes(x =`Transaction Date`, y = `Daily Max Vendor Transaction Amount` / 1000)) + 
+  geom_line( col = "#D53E4F")+ xlab('') + ylab('Daily Max Amount ($000)') + 
+  theme_classic() + ggtitle('Daily Max Amount') + geom_smooth()
+
+# Checks
+sum(is.na(purchase.cc.data))
+nrow(purchase.cc.data) == 442458
+```
+
+
+### 16. Z score max daily transaction for vendor
+
+see above  for explanation of z score. Provides a view of vendor transaction and hightlights transacation with a low probality. Ther are transaction that are more than 40x the standard deviation and should be investigated. 
+
+
+```{r}
+max.daily.z.score.name <- 'Max daily transaction Z Score'
+
+max.daily.amount.zscore.data <-
+  purchase.cc.data[, .(`Max daily transaction Z Score` = z_score(get(daily.max.amout.name))), by = c(vendor.name)]
+
+datatable(max.daily.amount.zscore.data)
+
+paste0('z score introduced ',
+       sum(is.na(max.daily.amount.zscore.data)),
+       ' NA in the data set. Convert NA to 0. ')
+
+# convert NA to 0
+max.daily.amount.zscore.data[is.na(get(max.daily.z.score.name))]$`Max daily transaction Z Score` <-
+  0
+
+ggplot(max.daily.amount.zscore.data, 
+       aes(`Max daily transaction Z Score`)) + 
+  geom_area(col = "#D53E4F",  stat = 'bin')+ xlab('Max daily Z-Score') + 
+  theme_classic() + ggtitle('Max Daily Z Score')
+
+purchase.cc.data$`Max daily transaction Z Score` <-
+  max.daily.amount.zscore.data$`Max daily transaction Z Score`
+
+# Checks
+sum(is.na(purchase.cc.data))
+nrow(purchase.cc.data) == 442458
+```
+
+
+### 17. Agency weekly spent on decription type  by weekend and weekday
+
+
+```{r}
+
+weekly.description.per.agency.data <-
+  purchase.cc.data[, .(`Weekly description amount` = (max(get(amount.name)))), by = c(year.week.name,weekend.day.name,agency.name, description.name)]
+
+
+datatable(weekly.description.per.agency.data)
+
+purchase.cc.data <-
+  merge(
+    x = purchase.cc.data,
+    y = weekly.description.per.agency.data,
+    by = c(year.week.name,weekend.day.name,agency.name, description.name),
+    all.x = TRUE
+  )
+
+ggplot(weekly.description.per.agency.data, 
+       aes(x = `weekend_day`, y = `Weekly description amount` / 1000)) + 
+  geom_bar(col = "#D53E4F", stat = 'identity')+ xlab(' ') + ylab('Agency Spent on description ($000)') + 
+  theme_classic() + ggtitle('Weekly Average Spent on Description')
+
+# Checks
+sum(is.na(purchase.cc.data))
+nrow(purchase.cc.data) == 442458
+```
+
+
+### 18. Number of daily transactions per mechant by carholder
+
+```{r}
+
+daily.merchant.transaction.cardholer.count <-
+  purchase.cc.data[, .(`Daily transaction count by cardholder` = .N), 
+                   by = c(transaction.date.name, merchant.category.code.name,weekend.day.name,cardholder.last.name)]
+
+
+datatable(daily.merchant.transaction.cardholer.count)
+
+purchase.cc.data <-
+  merge(
+    x = purchase.cc.data,
+    y = daily.merchant.transaction.cardholer.count,
+    by = c(transaction.date.name, merchant.category.code.name,weekend.day.name,cardholder.last.name),
+    all.x = TRUE
+  )
+
+hist(
+  daily.merchant.transaction.cardholer.count$`Daily transaction count by cardholder`,
+  col = "#D53E4F",
+  main = 'Histogram of amount daily merchant transaction by cardholders ',
+  xlab = 'Daily transaction'
+)
+
+
+# Checks
+sum(is.na(purchase.cc.data))
+nrow(purchase.cc.data) == 442458
+
+```
+
+
+### 19. Total max weekly weekday spent per agency at merchant
+
+Max amount per merchants. Also assumes that frauders are high spenders. Allows merchant to review the maximun spent by a cardholder on a given day. 
+
+```{r}
+
+weekly.weekday.spend.data <-
+  purchase.cc.data[, .(`Weekly max amount spend` = max(get(amount.name))), by = c(year.week.name, weekend.day.name, agency.name, merchant.category.code.name)]
+
+
+datatable(weekly.weekday.spend.data)
+
+purchase.cc.data <-
+  merge(
+    x = purchase.cc.data,
+    y = weekly.weekday.spend.data,
+    by = c(year.week.name, weekend.day.name,agency.name,merchant.category.code.name),
+    all.x = TRUE
+  )
+
+hist(
+  weekly.weekday.spend.data$`Weekly max amount spend`,
+  col = "#D53E4F",
+  main = 'Histogram of amount weekly max amount per agency at merchant ',
+  xlab = 'Weekly amount'
+)
+
+# Checks
+sum(is.na(purchase.cc.data))
+nrow(purchase.cc.data) == 442458
+
+```
+
+
+### 20. Total max daily amount per cardholder
+
+Max amount per carholders  Also assumes that frauders are high spenders. Allows agency to review the maximun spent by a cardholder on a given day, and further investigate its credibility. 
+
+```{r}
+
+daily.carholder.spend.data <-
+  purchase.cc.data[, .(`Daily cardholder spend` = max(get(amount.name))), by = c(transaction.date.name, cardholder.last.name)]
+
+
+datatable(weekly.weekday.spend.data)
+
+purchase.cc.data <-
+  merge(
+    x = purchase.cc.data,
+    y = daily.carholder.spend.data,
+    by = c(transaction.date.name, cardholder.last.name),
+    all.x = TRUE
+  )
+
+hist(
+  daily.carholder.spend.data$`Daily cardholder spend`,
+  col = "#D53E4F",
+  main = 'Histogram of max daily carholder spend',
+  xlab = 'Daily amount'
+)
+
+# Checks
+sum(is.na(purchase.cc.data))
+nrow(purchase.cc.data) == 442458
+
+```
+
+# Final Dataset 
+
+```{r}
+datatable(head(purchase.cc.data))
+```
+
+
