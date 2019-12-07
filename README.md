@@ -1,7 +1,12 @@
+####  Work in progress: 
+
+## Todo: 
+Given that the finance industry is heavility regulated, I wanted Add approach to summarize the SHAP value research paper and an implement it to interpert machine learning models.
+
 ### Summary
 Anomaly detection helps in the early detection of critical outliers in a system. Based on the context, these outliers can be detrimental and result in loss of resources, and time through errors, fraud, manipulation of stocks, and other such malicious activities. Outliers can also be beneficial for example in investing, and arbitrage. Business decisions that leverage anomaly detection, which used to require intense human resource and capacity can now be completed in a short time through versatile models and automation.
 
-### Paper Summary And Key Take Away 
+### Feature Engineering for Credit Card Fraud Paper
 
 In the feature engineering for credit card fraud paper, the author examines a new approach for developing features for machine learning algorithms. They address the cost-sensitivity, and the features are preprocessing to achieve improved fraud detection and savings.  Typical models only use raw transactional features, such as time, amount, place of the transaction. However, these approaches do not take into account the spending behavior of the customer, which is expected to help discover fraud patterns. 
 
