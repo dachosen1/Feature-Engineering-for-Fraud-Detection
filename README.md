@@ -27,13 +27,17 @@ The paper shown the importance of using features that analyze the consumer behav
 
 ### Supervised 
 
-**Auto ML**
+**Auto ML** 
+
 **Random Forest**
+
 **Isolation Forest**
 
 ### Unsupervised
 
 **DBSCAN**
+
 **Mean Shift**
+
 **K Means**
 
