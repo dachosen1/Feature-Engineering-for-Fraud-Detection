@@ -25,19 +25,5 @@ The paper shown the importance of using features that analyze the consumer behav
 
 ## Modeling Approaches: 
 
-### Supervised 
-
-**Auto ML** 
-
-**Random Forest**
-
-**Isolation Forest**
-
-### Unsupervised
-
-**DBSCAN**
-
-**Mean Shift**
-
-**K Means**
+In this repository, I experimented with different anomomly detection methods, both supervised and unsupervised. 
 
